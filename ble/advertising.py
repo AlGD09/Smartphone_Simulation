@@ -7,7 +7,7 @@ import dbus.service
 from gi.repository import GLib
 
 # Pfad des aktiven Bluetooth-Adapters (bei dir hci1)
-ADAPTER_PATH = "/org/bluez/hci1"
+ADAPTER_PATH = "/org/bluez/hci0"
 ADV_PATH = "/org/bluez/example/advertisement0"
 
 # Daten, die beworben werden sollen
