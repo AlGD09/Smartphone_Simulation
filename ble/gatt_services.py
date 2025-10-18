@@ -18,7 +18,10 @@ CHAR_RESPONSE = "0000aaa1-0000-1000-8001-aabbccddeeff"
 
 SHARED_KEY = b"this_is_test_key_32bytes____"
 
+# Falls dein Adapter hci1 heißt → so lassen
+# Falls dein System nur hci0 hat → ändere auf "/org/bluez/hci0"
 ADAPTER_PATH = "/org/bluez/hci1"
+
 SERVICE_PATH = "/org/bluez/example/service0"
 CHALLENGE_PATH = SERVICE_PATH + "/char_challenge"
 RESPONSE_PATH = SERVICE_PATH + "/char_response"
@@ -47,7 +50,7 @@ class Characteristic(dbus.service.Object):
             return {
                 "UUID": self.uuid,
                 "Service": self.service,
-                "Flags": self.flags,
+                "Flags": dbus.Array(self.flags, signature="s"),
             }
         return {}
 
@@ -83,8 +86,12 @@ class ResponseCharacteristic(Characteristic):
     @dbus.service.method("org.bluez.GattCharacteristic1",
                          in_signature="a{sv}", out_signature="ay")
     def ReadValue(self, options):
+        if not self.response:
+            print("⚠️ Response ist leer – sende Dummy-Wert zurück")
+            return dbus.Array([dbus.Byte(0x00)], signature="y")
+
         print(f"Response abgefragt: {self.response.hex()}")
-        return [dbus.Byte(b) for b in self.response]
+        return dbus.Array(self.response, signature="y")
 
 
 class AuthService(dbus.service.Object):
@@ -95,6 +102,7 @@ class AuthService(dbus.service.Object):
         self.bus = bus
         dbus.service.Object.__init__(self, bus, path)
 
+        # Characteristics initialisieren
         self.challenge_char = ChallengeCharacteristic(bus, CHALLENGE_PATH, self.path)
         self.response_char = ResponseCharacteristic(bus, RESPONSE_PATH, self.path)
 
@@ -107,6 +115,12 @@ class AuthService(dbus.service.Object):
                 "Primary": True,
             }
         return {}
+
+    @dbus.service.method("org.bluez.GattService1", in_signature="", out_signature="ao")
+    def GetCharacteristics(self):
+        """Gibt die Pfade aller Characteristics zurück (BlueZ erwartet dies)."""
+        return [dbus.ObjectPath(CHALLENGE_PATH),
+                dbus.ObjectPath(RESPONSE_PATH)]
 
     def handle_challenge(self, challenge: bytes):
         """Berechnet die Response und speichert sie in der ResponseCharacteristic."""
@@ -165,10 +179,18 @@ def start_gatt_server():
     print("Registriere GATT-Service...")
     try:
         gatt_manager.RegisterApplication(app.path, {},
-            reply_handler=lambda: print(f"GATT-Service aktiv – UUID: {SERVICE_UUID}"),
-            error_handler=lambda e: print("Fehler bei RegisterApplication:", e))
+            reply_handler=lambda: print(f"✅ GATT-Service aktiv – UUID: {SERVICE_UUID}"),
+            error_handler=lambda e: print("❌ Fehler bei RegisterApplication:", e))
     except Exception as e:
-        print("Ausnahme beim Start:", e)
+        print("❌ Ausnahme beim Start:", e)
         return None
 
-    return GLib.MainLoop()
+    loop = GLib.MainLoop()
+    try:
+        loop.run()
+    except KeyboardInterrupt:
+        print("\n🛑 GATT-Server beendet.")
+
+
+if __name__ == "__main__":
+    start_gatt_server()
