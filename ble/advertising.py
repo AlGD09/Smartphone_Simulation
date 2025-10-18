@@ -6,9 +6,11 @@ import dbus.mainloop.glib
 import dbus.service
 from gi.repository import GLib
 
-ADAPTER_PATH = "/org/bluez/hci0"
+# Pfad des aktiven Bluetooth-Adapters (bei dir hci1)
+ADAPTER_PATH = "/org/bluez/hci1"
 ADV_PATH = "/org/bluez/example/advertisement0"
 
+# Daten, die beworben werden sollen
 COMPANY_ID = 0xFFFF
 DATA = [0x03, 0x8F]
 DEVICE_NAME = "Xiaomi"
@@ -16,11 +18,14 @@ DEVICE_NAME = "Xiaomi"
 # D-Bus vorbereiten
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 bus = dbus.SystemBus()
+loop = None
+ad_manager = None
+adv = None
+
 
 class Advertisement(dbus.service.Object):
-    """
-    Korrektes BLE-Advertisement-Objekt für BlueZ ≥ 5.64
-    """
+    """Korrektes BLE-Advertisement-Objekt für BlueZ ≥ 5.64"""
+
     def __init__(self, bus, path):
         self.path = path
         self.bus = bus
@@ -53,22 +58,49 @@ class Advertisement(dbus.service.Object):
         return dbus.ObjectPath(self.path)
 
 
-# Adapter- und Advertising-Manager holen
-adapter = bus.get_object("org.bluez", ADAPTER_PATH)
-ad_manager = dbus.Interface(adapter, "org.bluez.LEAdvertisingManager1")
+def start_advertising():
+    """Startet BLE Advertising."""
+    global ad_manager, adv, loop
 
-adv = Advertisement(bus, ADV_PATH)
+    adapter = bus.get_object("org.bluez", ADAPTER_PATH)
+    ad_manager = dbus.Interface(adapter, "org.bluez.LEAdvertisingManager1")
 
-# Advertisement registrieren
-try:
-    ad_manager.RegisterAdvertisement(adv.get_path(), {},
-        reply_handler=lambda: print(f"✅ Advertising aktiv – Name: {DEVICE_NAME}, Manufacturer: 0x{COMPANY_ID:04X}, Data: {bytes(DATA).hex()}"),
-        error_handler=lambda e: print("❌ Fehler bei RegisterAdvertisement:", e))
-except Exception as e:
-    print("❌ Ausnahme beim Start:", e)
+    adv = Advertisement(bus, ADV_PATH)
+    loop = GLib.MainLoop()
 
-loop = GLib.MainLoop()
-try:
-    loop.run()
-except KeyboardInterrupt:
-    print("\n🛑 Advertising gestoppt.")
+    try:
+        ad_manager.RegisterAdvertisement(
+            adv.get_path(),
+            dbus.Dictionary({}, signature="sv"),
+            reply_handler=lambda: print(f"✅ Advertising aktiv – Name: {DEVICE_NAME}, Manufacturer: 0x{COMPANY_ID:04X}, Data: {bytes(DATA).hex()}"),
+            error_handler=lambda e: print("❌ Fehler bei RegisterAdvertisement:", e)
+        )
+    except Exception as e:
+        print("❌ Ausnahme beim Start:", e)
+        return
+
+    try:
+        loop.run()
+    except KeyboardInterrupt:
+        stop_advertising()
+
+
+def stop_advertising():
+    """Stoppt BLE Advertising."""
+    global ad_manager, adv, loop
+
+    if ad_manager and adv:
+        try:
+            ad_manager.UnregisterAdvertisement(adv.get_path())
+            print("🛑 Advertising gestoppt.")
+        except Exception as e:
+            if "UnknownObject" not in str(e):
+                print("⚠️ Fehler beim Stoppen:", e)
+
+    if loop:
+        loop.quit()
+
+
+# Wenn Skript direkt ausgeführt wird
+if __name__ == "__main__":
+    start_advertising()
