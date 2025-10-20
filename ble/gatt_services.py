@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import dbus
-import dbus.mainloop.glib
-import dbus.service
+import dbus, dbus.mainloop.glib, dbus.service
 from gi.repository import GLib
 import hmac, hashlib
 
-# --- BlueZ / D-Bus Setup ------------------------------------------------------
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
-# --- UUIDs / Paths -------------------------------------------------------------
 SERVICE_UUID   = "0000aaa0-0000-1000-8000-aabbccddeeff"
 CHAR_CHALLENGE = "0000aaa2-0000-1000-8000-aabbccddeeff"
 CHAR_RESPONSE  = "0000aaa1-0000-1000-8001-aabbccddeeff"
@@ -20,27 +16,20 @@ SERVICE_PATH   = "/org/bluez/example/service0"
 CHALLENGE_PATH = SERVICE_PATH + "/char_challenge"
 RESPONSE_PATH  = SERVICE_PATH + "/char_response"
 
-# --- Auth Setup ----------------------------------------------------------------
-SHARED_KEY     = b"this_is_test_key_32bytes5555"  # muss zur RCU passen
-EXPECTED_TOKEN = b"\xDE\xAD\xBE\xEF"             # Fallback (RCU akzeptiert .endswith)
+EXPECTED_TOKEN = b"\xDE\xAD\xBE\xEF"  # nur Platzhalter bis erste Challenge verarbeitet ist
 
-def calc_hmac_response(challenge: bytes) -> bytes:
-    return hmac.new(SHARED_KEY, challenge, hashlib.sha256).digest()
+def calc_hmac_response(challenge: bytes, key: bytes) -> bytes:
+    return hmac.new(key, challenge, hashlib.sha256).digest()
 
-# --- Basis-Klassen -------------------------------------------------------------
 class Characteristic(dbus.service.Object):
-    """Basis-GATT-Characteristic-Klasse (BlueZ GATT over D-Bus)."""
-
     def __init__(self, bus, uuid, flags, path, service_path):
         self.path = path
         self.bus = bus
         self.uuid = uuid
         self.flags = flags
-        # service_path MUSS als dbus.ObjectPath veröffentlicht werden
         self.service_path = service_path
         dbus.service.Object.__init__(self, bus, path)
 
-    # Properties API
     @dbus.service.method("org.freedesktop.DBus.Properties",
                          in_signature="s", out_signature="a{sv}")
     def GetAll(self, interface):
@@ -52,17 +41,12 @@ class Characteristic(dbus.service.Object):
             }
         return {}
 
-    # Optional (nicht zwingend): einzelne Get/Set-Methoden könnten hier ergänzt werden.
-
-
-# --- Challenge (WRITE) ---------------------------------------------------------
 class ChallengeCharacteristic(Characteristic):
-    """Characteristic, die die Challenge vom Central (RCU) empfängt."""
-
-    def __init__(self, bus, path, service_path, response_char):
+    def __init__(self, bus, path, service_path, response_char, hmac_key: bytes):
         super().__init__(bus, CHAR_CHALLENGE, ["write"], path, service_path)
         self.response_char = response_char
-        self._buffer = bytearray()  # falls BlueZ in mehreren Blöcken mit 'offset' schreibt
+        self.hmac_key = hmac_key or b""
+        self._buffer = bytearray()
 
     @dbus.service.method("org.bluez.GattCharacteristic1",
                          in_signature="aya{sv}", out_signature="")
@@ -76,42 +60,30 @@ class ChallengeCharacteristic(Characteristic):
         if offset == 0:
             self._buffer = bytearray(chunk)
         else:
-            # defensiv: bei Offset > 0 korrekt einfügen/anhängen
             if offset > len(self._buffer):
-                # fülle ggf. Lücke (sollte BlueZ i.d.R. nicht tun, aber sicher ist sicher)
                 self._buffer.extend(b"\x00" * (offset - len(self._buffer)))
-            # überschreiben/anhängen
             self._buffer[offset:offset+len(chunk)] = chunk
 
-        # Falls das komplette Paket in einem Schlag kam (typisch), direkt verarbeiten:
-        # Da wir das genaue Protokoll (Länge) kennen: Challenge = 16 byte
         if len(self._buffer) >= 16:
             challenge = bytes(self._buffer[:16])
             print(f"Challenge empfangen: {challenge.hex()}")
 
-            # Echten HMAC-Response berechnen:
-            response = calc_hmac_response(challenge)
+            if not self.hmac_key:
+                print("⚠️ Kein HMAC-Key gesetzt – Fallback-Token als Antwort.")
+                response = EXPECTED_TOKEN
+            else:
+                response = calc_hmac_response(challenge, self.hmac_key)
+
             self.response_char.set_response(response)
             print(f"→ Berechneter Response gesetzt: {response.hex()}")
-
-            # Zusätzlich (für Fallback-Tests) könnte man ans Ende DEADBEEF anhängen:
-            # self.response_char.set_response(response + EXPECTED_TOKEN)
-
-            # Buffer leeren, um nächste Challenge sauber zu empfangen
             self._buffer.clear()
 
-
-# --- Response (READ) -----------------------------------------------------------
 class ResponseCharacteristic(Characteristic):
-    """Characteristic, von der die RCU den Response liest."""
-
-    def __init__(self, bus, path, service_path):
+    def __init__(self, bus, path, service_path, initial_token=None):
         super().__init__(bus, CHAR_RESPONSE, ["read"], path, service_path)
-        # Initialer Wert (Fallback – wird durch Challenge überschrieben)
-        self.response = EXPECTED_TOKEN
+        self.response = EXPECTED_TOKEN if initial_token is None else initial_token
 
     def set_response(self, resp: bytes):
-        # defensiv: nie None/leer lassen
         self.response = resp if resp and isinstance(resp, (bytes, bytearray)) else EXPECTED_TOKEN
 
     @dbus.service.method("org.bluez.GattCharacteristic1",
@@ -119,44 +91,47 @@ class ResponseCharacteristic(Characteristic):
     def ReadValue(self, options):
         try:
             value = bytes(self.response) if self.response else EXPECTED_TOKEN
+
+            # Optional: MTU beachten, falls mitgeliefert (BlueZ übergibt 'mtu' nicht in allen Versionen)
+            mtu = options.get("mtu")
+            if mtu is not None:
+                try:
+                    mtu = int(mtu)
+                    if mtu > 0:
+                        # ATT-Read: häufig (MTU - 1) nutzbar; defensiv hart limitieren
+                        max_len = max(1, mtu - 1)
+                        value = value[:max_len]
+                except Exception:
+                    pass
+
+            # Offset sauber bedienen
             try:
                 offset = int(options.get("offset", 0))
             except Exception:
                 offset = 0
-
-            # Offsets korrekt bedienen (BlueZ kann in Blöcken lesen)
             if offset < 0 or offset > len(value):
-                # ungültiger Offset -> leere Antwort (oder 0x00)
-                print(f"ReadValue: ungültiger Offset {offset}, Länge {len(value)}")
                 chunk = b""
             else:
                 chunk = value[offset:]
 
             print(f"Response abgefragt (HEX, offset={offset}): {chunk.hex() if chunk else '<leer>'}")
 
-            # Korrekte D-Bus Antwort: ay  (Array of bytes)
-            return dbus.Array([dbus.Byte(b) for b in chunk], signature="y")
+            # **Wichtig**: ByteArray ist am robustesten
+            return dbus.ByteArray(chunk)
 
         except Exception as e:
             print(f"Fehler in ReadValue(): {e}")
-            # stets gültigen Rückgabewert liefern, um 0x0e zu vermeiden
-            return dbus.Array([dbus.Byte(0x00)], signature="y")
+            return dbus.ByteArray(b"\x00")
 
-
-# --- Service & Application -----------------------------------------------------
 class AuthService(dbus.service.Object):
-    """GATT-Service mit Challenge- und Response-Characteristics."""
-
-    def __init__(self, bus, path):
+    def __init__(self, bus, path, token: bytes):
         self.path = path
         self.bus = bus
         dbus.service.Object.__init__(self, bus, path)
 
-        # Reihenfolge wichtig: Response-Char zuerst anlegen, damit Challenge-Char sie referenzieren kann
         self.response_char  = ResponseCharacteristic(bus, RESPONSE_PATH, self.path)
-        self.challenge_char = ChallengeCharacteristic(bus, CHALLENGE_PATH, self.path, self.response_char)
+        self.challenge_char = ChallengeCharacteristic(bus, CHALLENGE_PATH, self.path, self.response_char, token)
 
-    # Service-Properties
     @dbus.service.method("org.freedesktop.DBus.Properties",
                          in_signature="s", out_signature="a{sv}")
     def GetAll(self, interface):
@@ -164,32 +139,24 @@ class AuthService(dbus.service.Object):
             return {"UUID": SERVICE_UUID, "Primary": True}
         return {}
 
-    # optional, BlueZ nutzt meist ObjectManager unten
     @dbus.service.method("org.bluez.GattService1",
                          in_signature="", out_signature="ao")
     def GetCharacteristics(self):
         return [dbus.ObjectPath(CHALLENGE_PATH), dbus.ObjectPath(RESPONSE_PATH)]
 
-
 class Application(dbus.service.Object):
-    """Implementiert ObjectManager für BlueZ GATT."""
-
-    def __init__(self, bus):
+    def __init__(self, bus, token: bytes):
         self.path = "/"
         self.bus = bus
         dbus.service.Object.__init__(self, bus, self.path)
-        self.service = AuthService(bus, SERVICE_PATH)
+        self.service = AuthService(bus, SERVICE_PATH, token)
 
     @dbus.service.method("org.freedesktop.DBus.ObjectManager",
                          in_signature="", out_signature="a{oa{sa{sv}}}")
     def GetManagedObjects(self):
-        # Vollständiges, konsistentes Objektmodell bereitstellen
         return {
             self.service.path: {
-                "org.bluez.GattService1": {
-                    "UUID": SERVICE_UUID,
-                    "Primary": True,
-                },
+                "org.bluez.GattService1": {"UUID": SERVICE_UUID, "Primary": True},
             },
             CHALLENGE_PATH: {
                 "org.bluez.GattCharacteristic1": {
@@ -207,14 +174,12 @@ class Application(dbus.service.Object):
             },
         }
 
-
-# --- Start ---------------------------------------------------------------------
-def start_gatt_server():
+def start_gatt_server(token: bytes):
     bus = dbus.SystemBus()
     adapter = bus.get_object("org.bluez", ADAPTER_PATH)
     gatt_manager = dbus.Interface(adapter, "org.bluez.GattManager1")
 
-    app = Application(bus)
+    app = Application(bus, token)
 
     print("Registriere GATT-Service...")
     gatt_manager.RegisterApplication(
@@ -230,6 +195,5 @@ def start_gatt_server():
     except KeyboardInterrupt:
         print("\n🛑 GATT-Server beendet.")
 
-
 if __name__ == "__main__":
-    start_gatt_server()
+    print("Bitte über phone_simulator.py starten (Token aus Cloud abrufen).")
