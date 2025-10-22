@@ -12,7 +12,8 @@ ADV_PATH = "/org/bluez/example/advertisement0"
 
 # Daten, die beworben werden sollen
 COMPANY_ID = 0xFFFF
-DATA = [0x03, 0x8F]
+DEVICE_ID = bytes.fromhex("bd45e75870af93c2")
+DATA = DEVICE_ID
 DEVICE_NAME = "Xiaomi"
 
 # D-Bus vorbereiten
