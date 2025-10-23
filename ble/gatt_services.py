@@ -69,7 +69,7 @@ class ChallengeCharacteristic(Characteristic):
             print(f"Challenge empfangen: {challenge.hex()}")
 
             if not self.hmac_key:
-                print("⚠️ Kein HMAC-Key gesetzt – Fallback-Token als Antwort.")
+                print(" Kein HMAC-Key gesetzt – Fallback-Token als Antwort.")
                 response = EXPECTED_TOKEN
             else:
                 response = calc_hmac_response(challenge, self.hmac_key)
@@ -193,7 +193,7 @@ def start_gatt_server(token: bytes):
     try:
         loop.run()
     except KeyboardInterrupt:
-        print("\n🛑 GATT-Server beendet.")
+        print("\n GATT-Server beendet.")
 
 if __name__ == "__main__":
     print("Bitte über phone_simulator.py starten (Token aus Cloud abrufen).")

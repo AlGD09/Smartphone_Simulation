@@ -93,10 +93,10 @@ def stop_advertising():
     if ad_manager and adv:
         try:
             ad_manager.UnregisterAdvertisement(adv.get_path())
-            print("🛑 Advertising gestoppt.")
+            print(" Advertising gestoppt.")
         except Exception as e:
             if "UnknownObject" not in str(e):
-                print("⚠️ Fehler beim Stoppen:", e)
+                print(" Fehler beim Stoppen:", e)
 
     if loop:
         loop.quit()

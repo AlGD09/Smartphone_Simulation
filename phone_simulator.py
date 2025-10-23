@@ -12,9 +12,9 @@ def run_gatt(token_bytes):
     start_gatt_server(token_bytes)   # <— WICHTIG: Token weitergeben!
 
 def cleanup_and_exit(sig=None, frame=None):
-    print("\n🧹 Stoppe Bluetooth-Simulation...")
+    print("\n Stoppe Bluetooth-Simulation...")
     stop_advertising()
-    print("✅ Alles gestoppt.")
+    print(" Alles gestoppt.")
     sys.exit(0)
 
 if __name__ == "__main__":
