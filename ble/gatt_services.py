@@ -185,8 +185,8 @@ def start_gatt_server(token: bytes):
     gatt_manager.RegisterApplication(
         app.path,
         {},
-        reply_handler=lambda: print(f"✅ GATT-Service aktiv – UUID: {SERVICE_UUID}"),
-        error_handler=lambda e: print("❌ Fehler bei RegisterApplication:", e),
+        reply_handler=lambda: print(f"GATT-Service aktiv – UUID: {SERVICE_UUID}"),
+        error_handler=lambda e: print("Fehler bei RegisterApplication:", e),
     )
 
     loop = GLib.MainLoop()

@@ -31,7 +31,7 @@ def load_or_request_credentials():
             with open(creds_file, "r", encoding="utf-8") as f:
                 creds = json.load(f)
             if creds.get("username") and creds.get("secret_hash"):
-                print("Zugangsdaten aus Datei geladen.")
+                print("Zugangsdaten geladen.")
                 return creds["username"], creds["secret_hash"]
         except (OSError, json.JSONDecodeError):
             print("Fehler beim Laden gespeicherter Zugangsdaten, Eingabe erforderlich.")
@@ -60,10 +60,10 @@ if __name__ == "__main__":
     cloud = CloudClient()
     token_str = cloud.request_token(username, device_id, secret_hash)   # akzeptiert "token" oder "auth_token"
     if not token_str:
-        print("❌ Kein Token erhalten – Abbruch.")
+        print("Kein Token erhalten – Abbruch.")
         sys.exit(1)
 
-    print(f"✅ Token erhalten: {token_str}")
+    print(f"Token erhalten: {token_str}")
     token_bytes = bytes.fromhex(token_str) if all(c in "0123456789abcdef" for c in token_str.lower()) else token_str.encode()
 
     signal.signal(signal.SIGINT, cleanup_and_exit)

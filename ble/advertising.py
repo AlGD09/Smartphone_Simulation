@@ -73,11 +73,11 @@ def start_advertising():
         ad_manager.RegisterAdvertisement(
             adv.get_path(),
             dbus.Dictionary({}, signature="sv"),
-            reply_handler=lambda: print(f"✅ Advertising aktiv – Name: {DEVICE_NAME}, Manufacturer: 0x{COMPANY_ID:04X}, Data: {bytes(DATA).hex()}"),
-            error_handler=lambda e: print("❌ Fehler bei RegisterAdvertisement:", e)
+            reply_handler=lambda: print(f"Advertising aktiv – Name: {DEVICE_NAME}, Manufacturer: 0x{COMPANY_ID:04X}, Data: {bytes(DATA).hex()}"),
+            error_handler=lambda e: print("Fehler bei RegisterAdvertisement:", e)
         )
     except Exception as e:
-        print("❌ Ausnahme beim Start:", e)
+        print("Ausnahme beim Start:", e)
         return
 
     try:
