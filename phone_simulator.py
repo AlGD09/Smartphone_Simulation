@@ -19,12 +19,12 @@ def cleanup_and_exit(sig=None, frame=None):
 
 if __name__ == "__main__":
     print("Starte Smartphone-Simulation ...")
-
+    username = "Admin"
     device_id = "bd45e75870af93c2"
     secret_hash = "cc03e747a6afbbcbf8be7668acfebee5"
 
     cloud = CloudClient()
-    token_str = cloud.request_token(device_id, secret_hash)   # akzeptiert "token" oder "auth_token"
+    token_str = cloud.request_token(username, device_id, secret_hash)   # akzeptiert "token" oder "auth_token"
     if not token_str:
         print("❌ Kein Token erhalten – Abbruch.")
         sys.exit(1)

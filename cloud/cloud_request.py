@@ -5,12 +5,13 @@ class CloudClient:
     def __init__(self, base_url="http://localhost:8080/api/devices/request"):
         self.base_url = base_url
 
-    def request_token(self, device_id: str, secret_hash: str) -> str:
+    def request_token(self, username: str, device_id: str, secret_hash: str) -> str:
         """
         Sendet die Geräteinformationen an die Cloud und gibt den Token zurück.
         """
         headers = {"Content-Type": "application/json"}
         payload = {
+            "userName": username,
             "deviceId": device_id,
             "secretHash": secret_hash
         }
