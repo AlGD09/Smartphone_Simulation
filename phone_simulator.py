@@ -11,7 +11,7 @@ import threading, time, signal, sys
 gatt_thread = None
 
 def run_gatt(token_bytes):
-    start_gatt_server(token_bytes)   # <— WICHTIG: Token weitergeben!
+    start_gatt_server(token_bytes)   
 
 def cleanup_and_exit(sig=None, frame=None):
     print("\n Stoppe Bluetooth-Simulation...")

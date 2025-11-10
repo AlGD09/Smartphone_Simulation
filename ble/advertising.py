@@ -14,7 +14,7 @@ ADV_PATH = "/org/bluez/example/advertisement0"
 COMPANY_ID = 0xFFFF
 DEVICE_ID = bytes.fromhex("bd45e75870af93c2")
 DATA = DEVICE_ID
-DEVICE_NAME = "Xiaomi"
+DEVICE_NAME = "Laptop-phone"
 
 # D-Bus vorbereiten
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
