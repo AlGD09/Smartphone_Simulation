@@ -62,7 +62,10 @@ if __name__ == "__main__":
     if not token_str:
         print("Kein Token erhalten – Abbruch.")
         sys.exit(1)
-
+    
+    # Fehler Event hervorrufen
+    # token_str = "1b595948ab294a12aabd290b45710985"
+    
     print(f"Token erhalten: {token_str}")
     token_bytes = bytes.fromhex(token_str) if all(c in "0123456789abcdef" for c in token_str.lower()) else token_str.encode()
 
