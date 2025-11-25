@@ -20,7 +20,7 @@ class CloudClient:
             response = requests.post(self.base_url, headers=headers, data=json.dumps(payload))
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            print(f"[CloudClient] Fehler bei der Anfrage: {e}")
+            print(f"[LOCK_RESPONSE] Timeout - Maschine nicht erreichbar {e}")
             return None
 
         # Antwort auswerten

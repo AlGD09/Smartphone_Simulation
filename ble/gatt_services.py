@@ -39,6 +39,7 @@ def update_rcu_timestamp(rcu_id: str) -> float:
     with RCU_LOCK:
         RCU_IDS[rcu_id] = ts
         _set_unlocked(True)
+        print("40s Verriegelungsüberwachung gestartet")
     return ts
 
 def snapshot_rcu_ids():

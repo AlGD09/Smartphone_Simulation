@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 import threading, time, signal, sys
 
 
-LOCK_MACHINE_WAIT = 25
+LOCK_MACHINE_WAIT = 40
 gatt_thread = None
 
 def run_gatt(token_bytes):
@@ -96,7 +96,6 @@ def main():
             time.sleep(0.5)
             continue
 
-        print("20s Verriegelungsüberwachung gestartet")
         now = time.monotonic()
 
         expired = []  # Liste für abgelaufene RCUs pro Schleifendurchlauf
@@ -105,7 +104,7 @@ def main():
             difference = now - timestamp
             print(difference)
             if difference > LOCK_MACHINE_WAIT:
-                print("Sende LOCK an CLoud...")
+                print("Sende LOCK an Cloud...")
                 executor.submit(lock.lock_machine, rcuId, "Laptop-phone", device_id)
                 expired.append(rcuId)
             else:
@@ -114,6 +113,7 @@ def main():
         # Entfernen der abgelaufenen IDs
         if expired:
             gatt_services.remove_rcu_ids(expired)
+            print("RCU_ID removed")
             if gatt_services.has_rcu_ids(): 
                 continue 
 
