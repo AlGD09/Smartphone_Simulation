@@ -53,7 +53,7 @@ def load_or_request_credentials():
 
     return username, secret_hash
 
-if __name__ == "__main__":
+def main():
     print("Starte Smartphone-Simulation ...")
 
     username, secret_hash = load_or_request_credentials()
@@ -84,27 +84,32 @@ if __name__ == "__main__":
 
     executor = ThreadPoolExecutor(max_workers=4)
 
-    try:
-        while True:
-            if gatt_services.UNLOCKED and gatt_services.has_rcu_ids():
-                print("20s Verriegelungsüberwachung gestartet")
-                now = time.monotonic()
+    
+    while gatt_services.UNLOCKED:
+        print("20s Verriegelungsüberwachung gestartet")
+        now = time.monotonic()
 
-                expired = []  # Liste für abgelaufene RCUs pro Schleifendurchlauf
+        expired = []  # Liste für abgelaufene RCUs pro Schleifendurchlauf
 
-                for rcuId, timestamp in gatt_services.snapshot_rcu_ids():
-                    difference = now - timestamp
-                    print(difference)
-                    if difference > LOCK_MACHINE_WAIT:
-                        print("Sende LOCK an CLoud...")
-                        executor.submit(lock.lock_machine, rcuId, "Laptop-phone", device_id)
-                        expired.append(rcuId)
+        for rcuId, timestamp in gatt_services.snapshot_rcu_ids():
+            difference = now - timestamp
+            print(difference)
+            if difference > LOCK_MACHINE_WAIT:
+                print("Sende LOCK an CLoud...")
+                executor.submit(lock.lock_machine, rcuId, "Laptop-phone", device_id)
+                expired.append(rcuId)
+            else: 
+                continue
 
-                # Entfernen der abgelaufenen IDs
-                if expired:
-                    gatt_services.remove_rcu_ids(expired)
+        # Entfernen der abgelaufenen IDs
+        if expired:
+            gatt_services.remove_rcu_ids(expired)
+            if gatt_services.has_rcu_ids(): 
+                continue 
 
+        
+if __name__ == "__main__":
+    try: 
+        main()
     except KeyboardInterrupt:
         cleanup_and_exit()
-    finally:
-        executor.shutdown(wait=False)
