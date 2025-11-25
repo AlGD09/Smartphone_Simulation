@@ -8,10 +8,12 @@ from ble.gatt_services import start_gatt_server
 from cloud.cloud_request import CloudClient
 from cloud.lock_machine import LockMachine
 from ble.gatt_services import RCU_IDS
+from ble.gatt_services import UNLOCKED
+from concurrent.futures import ThreadPoolExecutor
 import threading, time, signal, sys
 
 
-LOCK_MACHINE_WAIT = 5
+LOCK_MACHINE_WAIT = 20
 gatt_thread = None
 
 def run_gatt(token_bytes):
@@ -82,22 +84,32 @@ if __name__ == "__main__":
 
     lock = LockMachine()
 
+    executor = ThreadPoolExecutor(max_workers=4)
+
+    while UNLOCKED: 
+        print("20s Verriegelungsüverwachung gestartet")
+        now = time.time()
+
+        expired = []  # Liste für abgelaufene RCUs pro Schleifendurchlauf
+
+        for rcuId, timestamp in RCU_IDS.items(): 
+            difference = now - timestamp
+            print(difference)
+            if now - timestamp > LOCK_MACHINE_WAIT:
+                print("Sende LOCK an CLoud...")
+                executor.submit(lock.lock_machine, rcuId, "Laptop-phone", device_id)
+                expired.append(rcuId)
+
+        # Entfernen der abgelaufenen IDs
+        for rcuId in expired:
+            del RCU_IDS[rcuId]
+
 
     try:
         while True:
-            now = time.time()
-
-            expired = []  # Liste für abgelaufene RCUs pro Schleifendurchlauf
-
-            for rcuId, timestamp in RCU_IDS.items():
-                if now - timestamp > LOCK_MACHINE_WAIT:
-                    success = lock.lock_machine(rcuId, "Laptop-phone", device_id)
-                    expired.append(rcuId)
-
-            # Entfernen der abgelaufenen IDs
-            for rcuId in expired:
-                del RCU_IDS[rcuId]
 
             time.sleep(0.1)
     except KeyboardInterrupt:
         cleanup_and_exit()
+    finally:
+        executor.shutdown(wait=False)

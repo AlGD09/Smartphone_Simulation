@@ -20,6 +20,7 @@ RESPONSE_PATH  = SERVICE_PATH + "/char_response"
 EXPECTED_TOKEN = b"\xDE\xAD\xBE\xEF"  # nur Platzhalter bis erste Challenge verarbeitet ist
 
 RCU_IDS = {}
+UNLOCKED = False
 
 def calc_hmac_response(challenge: bytes, key: bytes) -> bytes:
     return hmac.new(key, challenge, hashlib.sha256).digest()
@@ -77,6 +78,9 @@ class ChallengeCharacteristic(Characteristic):
             rcuId = rcu_id.decode("utf-8")
             if rcuId not in RCU_IDS: 
                 RCU_IDS[rcuId] = timestamp
+                global UNLOCKED
+                UNLOCKED = True
+                print(rcuId + " succesfully added to list, wait 20s")
 
             if not self.hmac_key:
                 print(" Kein HMAC-Key gesetzt – Fallback-Token als Antwort.")
