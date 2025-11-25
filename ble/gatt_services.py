@@ -5,6 +5,7 @@ import dbus, dbus.mainloop.glib, dbus.service
 from gi.repository import GLib
 import hmac, hashlib
 import time
+import threading
 
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
@@ -21,6 +22,41 @@ EXPECTED_TOKEN = b"\xDE\xAD\xBE\xEF"  # nur Platzhalter bis erste Challenge vera
 
 RCU_IDS = {}
 UNLOCKED = False
+
+RCU_LOCK = threading.Lock()
+
+def _set_unlocked(flag: bool) -> None:
+    global UNLOCKED
+    UNLOCKED = flag
+
+def update_rcu_timestamp(rcu_id: str) -> float:
+    """Store the latest timestamp for the given RCU ID.
+
+    Returns the timestamp that was stored. The RCU will be marked as unlocked
+    while at least one ID exists.
+    """
+    ts = time.monotonic()
+    with RCU_LOCK:
+        RCU_IDS[rcu_id] = ts
+        _set_unlocked(True)
+    return ts
+
+def snapshot_rcu_ids():
+    """Return a stable copy of the current RCU timestamps."""
+    with RCU_LOCK:
+        return list(RCU_IDS.items())
+    
+def remove_rcu_ids(rcu_ids):
+    """Remove RCUs that should be expired and update the unlocked flag."""
+    with RCU_LOCK:
+        for rcu_id in rcu_ids:
+            RCU_IDS.pop(rcu_id, None)
+        if not RCU_IDS:
+            _set_unlocked(False)
+
+def has_rcu_ids() -> bool:
+    with RCU_LOCK:
+        return bool(RCU_IDS)
 
 def calc_hmac_response(challenge: bytes, key: bytes) -> bytes:
     return hmac.new(key, challenge, hashlib.sha256).digest()
@@ -74,13 +110,9 @@ class ChallengeCharacteristic(Characteristic):
             print(f"Challenge empfangen: {challenge.hex()}")
             print(f"RCU-ID vom Challenge: {rcu_id.decode("utf-8")}")
 
-            timestamp = time.time()
             rcuId = rcu_id.decode("utf-8")
-            if rcuId not in RCU_IDS: 
-                RCU_IDS[rcuId] = timestamp
-                global UNLOCKED
-                UNLOCKED = True
-                print(rcuId + " succesfully added to list, wait 20s")
+            timestamp = update_rcu_timestamp(rcuId)
+            print(f"{rcuId} timestamp refreshed ({timestamp})")
 
             if not self.hmac_key:
                 print(" Kein HMAC-Key gesetzt – Fallback-Token als Antwort.")

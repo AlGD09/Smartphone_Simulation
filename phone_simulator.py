@@ -86,28 +86,23 @@ if __name__ == "__main__":
 
     try:
         while True:
-            if gatt_services.UNLOCKED and gatt_services.RCU_IDS:
-                print("20s Verriegelungsüverwachung gestartet")
-                now = time.time()
+            if gatt_services.UNLOCKED and gatt_services.has_rcu_ids():
+                print("20s Verriegelungsüberwachung gestartet")
+                now = time.monotonic()
 
                 expired = []  # Liste für abgelaufene RCUs pro Schleifendurchlauf
 
-                for rcuId, timestamp in gatt_services.RCU_IDS.items(): 
+                for rcuId, timestamp in gatt_services.snapshot_rcu_ids():
                     difference = now - timestamp
                     print(difference)
-                    if now - timestamp > LOCK_MACHINE_WAIT:
+                    if difference > LOCK_MACHINE_WAIT:
                         print("Sende LOCK an CLoud...")
                         executor.submit(lock.lock_machine, rcuId, "Laptop-phone", device_id)
                         expired.append(rcuId)
 
                 # Entfernen der abgelaufenen IDs
-                for rcuId in expired:
-                    del gatt_services.RCU_IDS[rcuId]
-
-            if not gatt_services.RCU_IDS:
-                gatt_services.UNLOCKED = False
-
-            time.sleep(0.5)
+                if expired:
+                    gatt_services.remove_rcu_ids(expired)
 
     except KeyboardInterrupt:
         cleanup_and_exit()
