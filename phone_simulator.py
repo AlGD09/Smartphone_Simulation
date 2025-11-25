@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 import threading, time, signal, sys
 
 
-LOCK_MACHINE_WAIT = 20
+LOCK_MACHINE_WAIT = 25
 gatt_thread = None
 
 def run_gatt(token_bytes):
@@ -78,7 +78,8 @@ def main():
     gatt_thread = threading.Thread(target=run_gatt, args=(token_bytes,), daemon=True)
     gatt_thread.start()
 
-    start_advertising()
+    adv_thread = threading.Thread(target=start_advertising, daemon=True)
+    adv_thread.start()
 
     lock = LockMachine()
 
@@ -94,7 +95,7 @@ def main():
         if not gatt_services.UNLOCKED:
             time.sleep(0.5)
             continue
-        
+
         print("20s Verriegelungsüberwachung gestartet")
         now = time.monotonic()
 
