@@ -85,7 +85,16 @@ def main():
     executor = ThreadPoolExecutor(max_workers=4)
 
     
-    while gatt_services.UNLOCKED:
+    while True:
+        # Die Schleife muss permanent laufen, damit sie reagiert,
+        # sobald gatt_services.UNLOCKED durch eine Challenge auf True
+        # gesetzt wird. Mit der alten Bedingung wurde die Schleife
+        # nie betreten, weil UNLOCKED beim Start False ist.
+
+        if not gatt_services.UNLOCKED:
+            time.sleep(0.5)
+            continue
+        
         print("20s Verriegelungsüberwachung gestartet")
         now = time.monotonic()
 
@@ -98,7 +107,7 @@ def main():
                 print("Sende LOCK an CLoud...")
                 executor.submit(lock.lock_machine, rcuId, "Laptop-phone", device_id)
                 expired.append(rcuId)
-            else: 
+            else:
                 continue
 
         # Entfernen der abgelaufenen IDs
@@ -106,6 +115,8 @@ def main():
             gatt_services.remove_rcu_ids(expired)
             if gatt_services.has_rcu_ids(): 
                 continue 
+
+        time.sleep(0.5)
 
         
 if __name__ == "__main__":
