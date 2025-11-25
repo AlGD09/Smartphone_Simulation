@@ -4,11 +4,9 @@
 import os 
 import json
 from ble.advertising import start_advertising, stop_advertising
-from ble.gatt_services import start_gatt_server
 from cloud.cloud_request import CloudClient
 from cloud.lock_machine import LockMachine
-from ble.gatt_services import RCU_IDS
-from ble.gatt_services import UNLOCKED
+from ble import gatt_services
 from concurrent.futures import ThreadPoolExecutor
 import threading, time, signal, sys
 
@@ -17,7 +15,7 @@ LOCK_MACHINE_WAIT = 20
 gatt_thread = None
 
 def run_gatt(token_bytes):
-    start_gatt_server(token_bytes)   
+    gatt_services.start_gatt_server(token_bytes) 
 
 def cleanup_and_exit(sig=None, frame=None):
     print("\n Stoppe Bluetooth-Simulation...")
@@ -86,29 +84,31 @@ if __name__ == "__main__":
 
     executor = ThreadPoolExecutor(max_workers=4)
 
-    while UNLOCKED: 
-        print("20s Verriegelungsüverwachung gestartet")
-        now = time.time()
-
-        expired = []  # Liste für abgelaufene RCUs pro Schleifendurchlauf
-
-        for rcuId, timestamp in RCU_IDS.items(): 
-            difference = now - timestamp
-            print(difference)
-            if now - timestamp > LOCK_MACHINE_WAIT:
-                print("Sende LOCK an CLoud...")
-                executor.submit(lock.lock_machine, rcuId, "Laptop-phone", device_id)
-                expired.append(rcuId)
-
-        # Entfernen der abgelaufenen IDs
-        for rcuId in expired:
-            del RCU_IDS[rcuId]
-
-
     try:
         while True:
+            if gatt_services.UNLOCKED and gatt_services.RCU_IDS:
+                print("20s Verriegelungsüverwachung gestartet")
+                now = time.time()
 
-            time.sleep(0.1)
+                expired = []  # Liste für abgelaufene RCUs pro Schleifendurchlauf
+
+                for rcuId, timestamp in gatt_services.RCU_IDS.items(): 
+                    difference = now - timestamp
+                    print(difference)
+                    if now - timestamp > LOCK_MACHINE_WAIT:
+                        print("Sende LOCK an CLoud...")
+                        executor.submit(lock.lock_machine, rcuId, "Laptop-phone", device_id)
+                        expired.append(rcuId)
+
+                # Entfernen der abgelaufenen IDs
+                for rcuId in expired:
+                    del gatt_services.RCU_IDS[rcuId]
+
+            if not gatt_services.RCU_IDS:
+                gatt_services.UNLOCKED = False
+
+            time.sleep(0.5)
+
     except KeyboardInterrupt:
         cleanup_and_exit()
     finally:
