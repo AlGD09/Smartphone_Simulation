@@ -4,6 +4,7 @@
 import dbus, dbus.mainloop.glib, dbus.service
 from gi.repository import GLib
 import hmac, hashlib
+import time
 
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
@@ -17,6 +18,8 @@ CHALLENGE_PATH = SERVICE_PATH + "/char_challenge"
 RESPONSE_PATH  = SERVICE_PATH + "/char_response"
 
 EXPECTED_TOKEN = b"\xDE\xAD\xBE\xEF"  # nur Platzhalter bis erste Challenge verarbeitet ist
+
+RCU_IDS = {}
 
 def calc_hmac_response(challenge: bytes, key: bytes) -> bytes:
     return hmac.new(key, challenge, hashlib.sha256).digest()
@@ -68,7 +71,12 @@ class ChallengeCharacteristic(Characteristic):
             challenge = bytes(self._buffer[:16])
             rcu_id = bytes(self._buffer[16:23])
             print(f"Challenge empfangen: {challenge.hex()}")
-            print(f"RCU-ID vom Challenge: {rcu_id.hex()}")
+            print(f"RCU-ID vom Challenge: {rcu_id.decode("utf-8")}")
+
+            timestamp = time.time()
+            rcuId = rcu_id.decode("utf-8")
+            if rcuId not in RCU_IDS: 
+                RCU_IDS[rcuId] = timestamp
 
             if not self.hmac_key:
                 print(" Kein HMAC-Key gesetzt – Fallback-Token als Antwort.")

@@ -6,8 +6,12 @@ import json
 from ble.advertising import start_advertising, stop_advertising
 from ble.gatt_services import start_gatt_server
 from cloud.cloud_request import CloudClient
+from cloud.lock_machine import LockMachine
+from ble.gatt_services import RCU_IDS
 import threading, time, signal, sys
 
+
+LOCK_MACHINE_WAIT = 5
 gatt_thread = None
 
 def run_gatt(token_bytes):
@@ -76,8 +80,24 @@ if __name__ == "__main__":
 
     start_advertising()
 
+    lock = LockMachine()
+
+
     try:
         while True:
-            time.sleep(1)
+            now = time.time()
+
+            expired = []  # Liste für abgelaufene RCUs pro Schleifendurchlauf
+
+            for rcuId, timestamp in RCU_IDS.items():
+                if now - timestamp > LOCK_MACHINE_WAIT:
+                    success = lock.lock_machine(rcuId, "Laptop-phone", device_id)
+                    expired.append(rcuId)
+
+            # Entfernen der abgelaufenen IDs
+            for rcuId in expired:
+                del RCU_IDS[rcuId]
+
+            time.sleep(0.1)
     except KeyboardInterrupt:
         cleanup_and_exit()
