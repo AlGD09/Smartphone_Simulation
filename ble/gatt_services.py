@@ -105,9 +105,9 @@ class ChallengeCharacteristic(Characteristic):
                 self._buffer.extend(b"\x00" * (offset - len(self._buffer)))
             self._buffer[offset:offset+len(chunk)] = chunk
 
-        if len(self._buffer) >= 23:
+        if len(self._buffer) >= 22:
             challenge = bytes(self._buffer[:16])
-            rcu_id = bytes(self._buffer[16:23])
+            rcu_id = bytes(self._buffer[16:22])
             print(f"Challenge empfangen: {challenge.hex()}")
             print(f"RCU-ID vom Challenge: {rcu_id.decode("utf-8")}")
 
